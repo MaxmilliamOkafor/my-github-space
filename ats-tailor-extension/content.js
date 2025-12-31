@@ -23,26 +23,57 @@
     'oracle.com', 'oraclecloud.com', 'taleo.net'
   ];
 
-  // ============ WORKDAY SELECTORS ============
+  // ============ WORKDAY SELECTORS (UPDATED FOR REAL WORKDAY PAGES) ============
   const WORKDAY_SELECTORS = {
-    apply: ['button[data-automation-id="applyButton"]', 'button:contains("Apply")', 'a[data-automation-id="applyButton"]', '[data-automation-id="jobPostingApplyButton"]'],
-    manualApply: ['button[data-automation-id="applyManually"]', 'button:contains("Apply Manually")', '[data-automation-id="manuallyApply"]'],
-    email: ['input[data-automation-id="email"]', 'input[name="username"]', 'input[type="email"]', 'input[data-automation-id="userName"]'],
-    password: ['input[data-automation-id="password"]', 'input[name="password"]', 'input[type="password"]'],
-    signIn: ['button[data-automation-id="signInButton"]', 'button:contains("Sign In")', 'button[type="submit"]:contains("Sign")'],
-    createAccount: ['button:contains("Create Account")', 'a:contains("Create Account")', '[data-automation-id="createAccountLink"]'],
-    firstName: ['input[data-automation-id="firstName"]', 'input[name*="firstName"]', 'input[name*="legalNameSection_firstName"]'],
-    lastName: ['input[data-automation-id="lastName"]', 'input[name*="lastName"]', 'input[name*="legalNameSection_lastName"]'],
-    email2: ['input[data-automation-id="email"]', 'input[name*="email"]'],
-    phone: ['input[data-automation-id="phone"]', 'input[name*="phone"]', 'input[type="tel"]'],
-    address: ['input[data-automation-id="addressLine1"]', 'input[name*="address"]'],
-    city: ['input[data-automation-id="city"]', 'input[name*="city"]'],
-    state: ['input[data-automation-id="state"]', 'select[data-automation-id="state"]', 'input[name*="state"]'],
-    postalCode: ['input[data-automation-id="postal"]', 'input[name*="postalCode"]', 'input[name*="zip"]'],
-    country: ['select[data-automation-id="country"]', 'input[data-automation-id="country"]'],
-    continueBtn: ['button[data-automation-id="bottom-navigation-next-button"]', 'button:contains("Continue")', 'button:contains("Next")'],
-    saveBtn: ['button[data-automation-id="saveAndContinue"]', 'button:contains("Save")', 'button:contains("Submit")'],
-    STOP_AT: ['input[type="file"]', 'textarea[data-automation-id*="cover"]', '[data-automation-id="resumeUpload"]']
+    // Apply button selectors - multiple fallbacks for different Workday implementations
+    apply: [
+      'button[data-automation-id="jobPostingApplyButton"]',
+      'a[data-automation-id="jobPostingApplyButton"]',
+      '[data-automation-id="applyButton"]',
+      'button.css-1ew5k9l', // Common Workday apply button class
+      'a[href*="apply"]',
+      'button', // Will be filtered by text content
+    ],
+    manualApply: [
+      'button[data-automation-id="applyManually"]',
+      '[data-automation-id="manuallyApply"]',
+      'button[data-automation-id="continueWithoutLinkedin"]',
+      'a[data-automation-id="applyManually"]',
+    ],
+    email: [
+      'input[data-automation-id="email"]',
+      'input[data-automation-id="userName"]', 
+      'input[name="username"]',
+      'input[type="email"]',
+      'input[id*="email" i]',
+      'input[name*="email" i]',
+    ],
+    password: [
+      'input[data-automation-id="password"]',
+      'input[name="password"]',
+      'input[type="password"]',
+    ],
+    signIn: [
+      'button[data-automation-id="signInButton"]',
+      'button[type="submit"]',
+      'input[type="submit"]',
+    ],
+    createAccount: [
+      '[data-automation-id="createAccountLink"]',
+      'a[href*="createAccount"]',
+    ],
+    firstName: ['input[data-automation-id="legalNameSection_firstName"]', 'input[data-automation-id="firstName"]', 'input[name*="firstName" i]'],
+    lastName: ['input[data-automation-id="legalNameSection_lastName"]', 'input[data-automation-id="lastName"]', 'input[name*="lastName" i]'],
+    email2: ['input[data-automation-id="email"]', 'input[name*="email" i]', 'input[type="email"]'],
+    phone: ['input[data-automation-id="phone"]', 'input[name*="phone" i]', 'input[type="tel"]'],
+    address: ['input[data-automation-id="addressSection_addressLine1"]', 'input[data-automation-id="addressLine1"]', 'input[name*="address" i]'],
+    city: ['input[data-automation-id="addressSection_city"]', 'input[data-automation-id="city"]', 'input[name*="city" i]'],
+    state: ['select[data-automation-id="addressSection_countryRegion"]', 'select[data-automation-id="state"]', 'input[name*="state" i]'],
+    postalCode: ['input[data-automation-id="addressSection_postalCode"]', 'input[data-automation-id="postal"]', 'input[name*="zip" i]', 'input[name*="postal" i]'],
+    country: ['select[data-automation-id="addressSection_country"]', 'select[data-automation-id="country"]'],
+    continueBtn: ['button[data-automation-id="bottom-navigation-next-button"]', 'button[data-automation-id="saveAndContinueButton"]'],
+    saveBtn: ['button[data-automation-id="saveAndContinue"]', 'button[type="submit"]'],
+    STOP_AT: ['input[type="file"]', 'textarea[data-automation-id*="cover"]', '[data-automation-id="file-upload"]', 'div[data-automation-id="resumeUpload"]']
   };
 
   const isSupportedHost = (hostname) =>
@@ -81,7 +112,7 @@
     return text;
   }
 
-  async function waitForElement(selectors, timeout = 10000) {
+  async function waitForElement(selectors, timeout = 10000, textMatch = null) {
     const start = Date.now();
     while (Date.now() - start < timeout) {
       for (const selector of selectors) {
@@ -99,8 +130,20 @@
               }
             }
           } else {
-            const el = document.querySelector(selector);
-            if (el && el.offsetParent !== null) return el;
+            const elements = document.querySelectorAll(selector);
+            for (const el of elements) {
+              if (el && el.offsetParent !== null) {
+                // If textMatch is provided, check text content
+                if (textMatch) {
+                  const text = el.textContent?.trim().toLowerCase();
+                  if (text === textMatch.toLowerCase() || text?.includes(textMatch.toLowerCase())) {
+                    return el;
+                  }
+                } else {
+                  return el;
+                }
+              }
+            }
           }
         } catch (e) {}
       }
@@ -109,12 +152,19 @@
     return null;
   }
 
-  async function clickElement(selectors, description = '') {
-    const el = await waitForElement(selectors, 5000);
+  async function clickElement(selectors, description = '', textMatch = null) {
+    const el = await waitForElement(selectors, 5000, textMatch);
     if (el) {
       console.log(`[ATS Tailor] Clicking: ${description || selectors[0]}`);
-      el.click();
-      await sleep(500);
+      // Try multiple click methods for Workday
+      try {
+        el.focus();
+        el.click();
+      } catch (e) {}
+      try {
+        el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+      } catch (e) {}
+      await sleep(800);
       return true;
     }
     console.log(`[ATS Tailor] Could not find: ${description || selectors[0]}`);
@@ -207,13 +257,21 @@
       const jobData = scrapeWorkdayJob();
       console.log('[ATS Tailor] Job scraped:', jobData.title, 'at', jobData.company);
 
-      // STEP 1: Click Apply button
+      // STEP 1: Click Apply button (search by text "Apply")
       updateBanner('Step 1/4: Clicking Apply...', 'working');
-      const applyClicked = await clickElement(WORKDAY_SELECTORS.apply, 'Apply Button');
+      
+      // Try specific selectors first, then fallback to text-based search
+      let applyClicked = await clickElement(WORKDAY_SELECTORS.apply.slice(0, -1), 'Apply Button');
+      if (!applyClicked) {
+        // Fallback: find button/link with exact "Apply" text
+        applyClicked = await clickElement(['button', 'a'], 'Apply Button', 'Apply');
+      }
       if (!applyClicked) {
         console.log('[ATS Tailor] No Apply button found, may already be on application page');
+      } else {
+        console.log('[ATS Tailor] ✅ Apply button clicked!');
       }
-      await sleep(1500);
+      await sleep(2000);
 
       // STEP 2: Click Apply Manually (if popup appears)
       updateBanner('Step 2/4: Apply Manually...', 'working');
@@ -380,9 +438,15 @@
     if (hostname.includes('workable.com')) return 'workable';
     return 'unknown';
   }
-  let tailoringInProgress = false;
-  const startTime = Date.now();
-  const currentJobUrl = window.location.href;
+
+  // Check if Workday automation is enabled
+  async function isWorkdayAutoEnabled() {
+    return new Promise(resolve => {
+      chrome.storage.local.get(['workday_auto_enabled'], result => {
+        resolve(result.workday_auto_enabled !== false); // Default enabled
+      });
+    });
+  }
 
   // ============ STATUS BANNER ============
   function createStatusBanner() {
@@ -982,8 +1046,41 @@
   }
 
   // ============ INIT - AUTO-DETECT AND TAILOR ============
-  function initAutoTailor() {
-    // Wait for page to stabilize
+  async function initAutoTailor() {
+    const platform = detectPlatform();
+    console.log('[ATS Tailor] Detected platform:', platform);
+
+    // AUTO-START WORKDAY FLOW if on a Workday job page
+    if (platform === 'workday_full_flow') {
+      console.log('[ATS Tailor] 🎯 Workday job page detected!');
+      
+      // Check if auto-enabled
+      const autoEnabled = await isWorkdayAutoEnabled();
+      if (autoEnabled) {
+        console.log('[ATS Tailor] ✅ Workday auto-mode enabled, starting flow in 2 seconds...');
+        
+        // Show notification banner
+        createStatusBanner();
+        updateBanner('🎯 Workday detected! Auto-starting in 2s...', 'working');
+        
+        // Wait for page to fully load, then start
+        setTimeout(async () => {
+          console.log('[ATS Tailor] 🚀 Auto-starting Workday Full Flow!');
+          await handleWorkdayFullFlow();
+        }, 2000);
+      } else {
+        console.log('[ATS Tailor] ⏸️ Workday auto-mode disabled. Use popup to trigger.');
+        createStatusBanner();
+        updateBanner('Workday detected! Click "Run Workday Flow" in extension popup', 'working');
+        setTimeout(() => {
+          const banner = document.getElementById('ats-auto-banner');
+          if (banner) banner.remove();
+        }, 5000);
+      }
+      return;
+    }
+
+    // Standard ATS flow - wait for page to stabilize
     setTimeout(() => {
       if (hasUploadFields()) {
         console.log('[ATS Tailor] Upload fields detected! Starting auto-tailor...');
