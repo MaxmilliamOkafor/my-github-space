@@ -166,6 +166,18 @@ class ATSTailor {
       this.showToast(enabled ? 'Auto tailor enabled' : 'Auto tailor disabled', 'success');
     });
 
+    // Workday Full Flow
+    document.getElementById('runWorkdayFlow')?.addEventListener('click', () => this.runWorkdayFlow());
+    document.getElementById('workdayAutoToggle')?.addEventListener('change', (e) => {
+      const enabled = !!e.target?.checked;
+      chrome.storage.local.set({ workday_auto_enabled: enabled });
+      this.showToast(enabled ? 'Workday automation enabled' : 'Workday automation disabled', 'success');
+    });
+    document.getElementById('saveWorkdayCreds')?.addEventListener('click', () => this.saveWorkdayCredentials());
+    
+    // Load Workday settings
+    this.loadWorkdaySettings();
+
     // Preview tabs
     document.getElementById('previewCvTab')?.addEventListener('click', () => this.switchPreviewTab('cv'));
     document.getElementById('previewCoverTab')?.addEventListener('click', () => this.switchPreviewTab('cover'));
@@ -174,6 +186,84 @@ class ATSTailor {
     document.getElementById('password')?.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') this.login();
     });
+  }
+
+  async loadWorkdaySettings() {
+    const result = await new Promise(resolve => {
+      chrome.storage.local.get(['workday_email', 'workday_password', 'workday_auto_enabled'], resolve);
+    });
+    
+    const emailInput = document.getElementById('workdayEmail');
+    const passwordInput = document.getElementById('workdayPassword');
+    const autoToggle = document.getElementById('workdayAutoToggle');
+    
+    if (emailInput && result.workday_email) emailInput.value = result.workday_email;
+    if (passwordInput && result.workday_password) passwordInput.value = result.workday_password;
+    if (autoToggle) autoToggle.checked = result.workday_auto_enabled !== false;
+  }
+
+  saveWorkdayCredentials() {
+    const email = document.getElementById('workdayEmail')?.value;
+    const password = document.getElementById('workdayPassword')?.value;
+    
+    if (!email || !password) {
+      this.showToast('Please enter both email and password', 'error');
+      return;
+    }
+    
+    chrome.runtime.sendMessage({
+      action: 'UPDATE_WORKDAY_CREDENTIALS',
+      email: email,
+      password: password
+    });
+    
+    this.showToast('Workday credentials saved!', 'success');
+  }
+
+  async runWorkdayFlow() {
+    if (!this.session) {
+      this.showToast('Please login first', 'error');
+      return;
+    }
+
+    // Get current tab to check if on Workday
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.url?.includes('workday')) {
+      this.showToast('Navigate to a Workday job page first', 'error');
+      return;
+    }
+
+    this.showToast('Starting Workday automation...', 'success');
+    this.setStatus('Running Workday Flow...', 'working');
+
+    // Get user profile for autofill
+    let candidateData = null;
+    try {
+      const profileRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${this.session.user.id}&select=*`,
+        {
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${this.session.access_token}`,
+          },
+        }
+      );
+      const profiles = await profileRes.json();
+      candidateData = profiles?.[0] || null;
+    } catch (e) {
+      console.log('Could not fetch profile for Workday flow');
+    }
+
+    // Trigger Workday flow via background script
+    chrome.runtime.sendMessage({
+      action: 'TRIGGER_WORKDAY_FLOW',
+      candidateData: candidateData
+    });
+
+    // Close popup after a moment
+    setTimeout(() => {
+      window.close();
+    }, 1000);
   }
 
   copyCurrentContent() {

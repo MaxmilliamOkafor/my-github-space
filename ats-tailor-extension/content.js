@@ -1,14 +1,19 @@
-// content.js - AUTO-TAILOR + ATTACH v1.4.0
+// content.js - AUTO-TAILOR + ATTACH v1.5.0 + WORKDAY FULL FLOW
 // Automatically triggers tailoring on ATS pages, then attaches files
+// Now includes Workday 4-step automation
 
 (function() {
   'use strict';
 
-  console.log('[ATS Tailor] AUTO-TAILOR v1.4.0 loaded on:', window.location.hostname);
+  console.log('[ATS Tailor] AUTO-TAILOR v1.5.0 loaded on:', window.location.hostname);
 
   // ============ CONFIGURATION ============
   const SUPABASE_URL = 'https://wntpldomgjutwufphnpg.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndudHBsZG9tZ2p1dHd1ZnBobnBnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY2MDY0NDAsImV4cCI6MjA4MjE4MjQ0MH0.vOXBQIg6jghsAby2MA1GfE-MNTRZ9Ny1W2kfUHGUzNM';
+  
+  // Workday Credentials (stored in chrome.storage, fallback defaults)
+  let WORKDAY_EMAIL = 'Maxokafordev@gmail.com';
+  let WORKDAY_PASSWORD = 'May19315park@';
   
   const SUPPORTED_HOSTS = [
     'greenhouse.io', 'job-boards.greenhouse.io', 'boards.greenhouse.io',
@@ -17,6 +22,28 @@
     'workable.com', 'apply.workable.com', 'icims.com',
     'oracle.com', 'oraclecloud.com', 'taleo.net'
   ];
+
+  // ============ WORKDAY SELECTORS ============
+  const WORKDAY_SELECTORS = {
+    apply: ['button[data-automation-id="applyButton"]', 'button:contains("Apply")', 'a[data-automation-id="applyButton"]', '[data-automation-id="jobPostingApplyButton"]'],
+    manualApply: ['button[data-automation-id="applyManually"]', 'button:contains("Apply Manually")', '[data-automation-id="manuallyApply"]'],
+    email: ['input[data-automation-id="email"]', 'input[name="username"]', 'input[type="email"]', 'input[data-automation-id="userName"]'],
+    password: ['input[data-automation-id="password"]', 'input[name="password"]', 'input[type="password"]'],
+    signIn: ['button[data-automation-id="signInButton"]', 'button:contains("Sign In")', 'button[type="submit"]:contains("Sign")'],
+    createAccount: ['button:contains("Create Account")', 'a:contains("Create Account")', '[data-automation-id="createAccountLink"]'],
+    firstName: ['input[data-automation-id="firstName"]', 'input[name*="firstName"]', 'input[name*="legalNameSection_firstName"]'],
+    lastName: ['input[data-automation-id="lastName"]', 'input[name*="lastName"]', 'input[name*="legalNameSection_lastName"]'],
+    email2: ['input[data-automation-id="email"]', 'input[name*="email"]'],
+    phone: ['input[data-automation-id="phone"]', 'input[name*="phone"]', 'input[type="tel"]'],
+    address: ['input[data-automation-id="addressLine1"]', 'input[name*="address"]'],
+    city: ['input[data-automation-id="city"]', 'input[name*="city"]'],
+    state: ['input[data-automation-id="state"]', 'select[data-automation-id="state"]', 'input[name*="state"]'],
+    postalCode: ['input[data-automation-id="postal"]', 'input[name*="postalCode"]', 'input[name*="zip"]'],
+    country: ['select[data-automation-id="country"]', 'input[data-automation-id="country"]'],
+    continueBtn: ['button[data-automation-id="bottom-navigation-next-button"]', 'button:contains("Continue")', 'button:contains("Next")'],
+    saveBtn: ['button[data-automation-id="saveAndContinue"]', 'button:contains("Save")', 'button:contains("Submit")'],
+    STOP_AT: ['input[type="file"]', 'textarea[data-automation-id*="cover"]', '[data-automation-id="resumeUpload"]']
+  };
 
   const isSupportedHost = (hostname) =>
     SUPPORTED_HOSTS.some((h) => hostname === h || hostname.endsWith(`.${h}`));
@@ -34,6 +61,325 @@
   let coverFile = null;
   let coverLetterText = '';
   let hasTriggeredTailor = false;
+  let tailoringInProgress = false;
+  let workdayFlowInProgress = false;
+  const startTime = Date.now();
+  const currentJobUrl = window.location.href;
+
+  // ============ UTILITY FUNCTIONS ============
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  function normalizeLocation(text) {
+    if (!text) return '';
+    if (text.includes('US') || text.includes('United States')) {
+      const cityMatch = text.match(/([A-Za-z\s]+),\s*(US|United States)/);
+      const city = cityMatch?.[1]?.trim();
+      return city ? `${city}, United States` : 'United States';
+    }
+    return text;
+  }
+
+  async function waitForElement(selectors, timeout = 10000) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      for (const selector of selectors) {
+        try {
+          // Handle :contains pseudo-selector
+          if (selector.includes(':contains(')) {
+            const match = selector.match(/(.+?):contains\("(.+?)"\)/);
+            if (match) {
+              const [, baseSelector, text] = match;
+              const elements = document.querySelectorAll(baseSelector || '*');
+              for (const el of elements) {
+                if (el.textContent?.includes(text) && el.offsetParent !== null) {
+                  return el;
+                }
+              }
+            }
+          } else {
+            const el = document.querySelector(selector);
+            if (el && el.offsetParent !== null) return el;
+          }
+        } catch (e) {}
+      }
+      await sleep(200);
+    }
+    return null;
+  }
+
+  async function clickElement(selectors, description = '') {
+    const el = await waitForElement(selectors, 5000);
+    if (el) {
+      console.log(`[ATS Tailor] Clicking: ${description || selectors[0]}`);
+      el.click();
+      await sleep(500);
+      return true;
+    }
+    console.log(`[ATS Tailor] Could not find: ${description || selectors[0]}`);
+    return false;
+  }
+
+  async function fillInput(selectors, value, description = '') {
+    const el = await waitForElement(selectors, 3000);
+    if (el && value) {
+      console.log(`[ATS Tailor] Filling: ${description || selectors[0]}`);
+      el.focus();
+      el.value = value;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(200);
+      return true;
+    }
+    return false;
+  }
+
+  function isAtResumeSection() {
+    for (const selector of WORKDAY_SELECTORS.STOP_AT) {
+      const el = document.querySelector(selector);
+      if (el && el.offsetParent !== null) return true;
+    }
+    return false;
+  }
+
+  // ============ WORKDAY JOB SCRAPING ============
+  function scrapeWorkdayJob() {
+    const getText = (selectors) => {
+      for (const sel of selectors) {
+        try {
+          const el = document.querySelector(sel);
+          if (el?.textContent?.trim()) return el.textContent.trim();
+        } catch {}
+      }
+      return '';
+    };
+
+    const title = getText([
+      'h1[data-automation-id="jobPostingHeader"]',
+      'h2[data-automation-id="jobPostingHeader"]',
+      'h1',
+      '[data-automation-id="jobTitle"]'
+    ]);
+
+    const company = getText([
+      'div[data-automation-id="jobPostingCompany"]',
+      '[data-automation-id="companyName"]',
+      '.css-1m5e5g2'
+    ]) || document.title.split(' at ').pop()?.split('|')[0]?.trim() || '';
+
+    const rawLocation = getText([
+      'div[data-automation-id="locations"]',
+      '[data-automation-id="jobLocation"]',
+      '.css-cygeeu'
+    ]);
+    const location = normalizeLocation(rawLocation);
+
+    const description = getText([
+      'div[data-automation-id="jobPostingDescription"]',
+      '[data-automation-id="jobPostingDescription"]'
+    ]).substring(0, 3000);
+
+    return { title, company, location, description, url: window.location.href, platform: 'workday' };
+  }
+
+  // ============ WORKDAY FULL FLOW ============
+  async function handleWorkdayFullFlow(candidateData = null) {
+    if (workdayFlowInProgress) {
+      console.log('[ATS Tailor] Workday flow already in progress');
+      return;
+    }
+
+    workdayFlowInProgress = true;
+    console.log('[ATS Tailor] 🚀 Starting Workday Full Flow');
+    createStatusBanner();
+    updateBanner('Workday Flow: Scraping job data...', 'working');
+
+    try {
+      // Load Workday credentials from storage
+      const stored = await new Promise(resolve => {
+        chrome.storage.local.get(['workday_email', 'workday_password'], resolve);
+      });
+      if (stored.workday_email) WORKDAY_EMAIL = stored.workday_email;
+      if (stored.workday_password) WORKDAY_PASSWORD = stored.workday_password;
+
+      // STEP 0: Scrape job data BEFORE clicking Apply
+      const jobData = scrapeWorkdayJob();
+      console.log('[ATS Tailor] Job scraped:', jobData.title, 'at', jobData.company);
+
+      // STEP 1: Click Apply button
+      updateBanner('Step 1/4: Clicking Apply...', 'working');
+      const applyClicked = await clickElement(WORKDAY_SELECTORS.apply, 'Apply Button');
+      if (!applyClicked) {
+        console.log('[ATS Tailor] No Apply button found, may already be on application page');
+      }
+      await sleep(1500);
+
+      // STEP 2: Click Apply Manually (if popup appears)
+      updateBanner('Step 2/4: Apply Manually...', 'working');
+      await clickElement(WORKDAY_SELECTORS.manualApply, 'Apply Manually');
+      await sleep(1500);
+
+      // STEP 3: Login (if login modal appears)
+      const emailField = await waitForElement(WORKDAY_SELECTORS.email, 3000);
+      if (emailField) {
+        updateBanner('Step 3/4: Logging in...', 'working');
+        await fillInput(WORKDAY_SELECTORS.email, WORKDAY_EMAIL, 'Email');
+        await fillInput(WORKDAY_SELECTORS.password, WORKDAY_PASSWORD, 'Password');
+        await clickElement(WORKDAY_SELECTORS.signIn, 'Sign In');
+        await sleep(3000);
+      }
+
+      // STEP 4: Auto-fill application pages until Resume section
+      updateBanner('Step 4/4: Auto-filling application...', 'working');
+      
+      // Get candidate data from storage if not provided
+      if (!candidateData) {
+        const profile = await new Promise(resolve => {
+          chrome.storage.local.get(['ats_session'], async (result) => {
+            if (!result.ats_session?.access_token) {
+              resolve(null);
+              return;
+            }
+            try {
+              const profileRes = await fetch(
+                `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${result.ats_session.user.id}&select=*`,
+                {
+                  headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${result.ats_session.access_token}`,
+                  },
+                }
+              );
+              const profileRows = await profileRes.json();
+              resolve(profileRows?.[0] || null);
+            } catch (e) {
+              resolve(null);
+            }
+          });
+        });
+        candidateData = profile;
+      }
+
+      // Auto-fill fields on each page
+      let pageCount = 0;
+      const maxPages = 10;
+      
+      while (pageCount < maxPages && !isAtResumeSection()) {
+        pageCount++;
+        console.log(`[ATS Tailor] Filling application page ${pageCount}`);
+        
+        // Fill personal info
+        if (candidateData) {
+          await fillInput(WORKDAY_SELECTORS.firstName, candidateData.first_name, 'First Name');
+          await fillInput(WORKDAY_SELECTORS.lastName, candidateData.last_name, 'Last Name');
+          await fillInput(WORKDAY_SELECTORS.email2, candidateData.email, 'Email');
+          await fillInput(WORKDAY_SELECTORS.phone, candidateData.phone, 'Phone');
+          await fillInput(WORKDAY_SELECTORS.address, candidateData.address, 'Address');
+          await fillInput(WORKDAY_SELECTORS.city, candidateData.city, 'City');
+          await fillInput(WORKDAY_SELECTORS.postalCode, candidateData.zip_code, 'Postal Code');
+          
+          // Handle state dropdown/input
+          const stateEl = await waitForElement(WORKDAY_SELECTORS.state, 1000);
+          if (stateEl && candidateData.state) {
+            if (stateEl.tagName === 'SELECT') {
+              stateEl.value = candidateData.state;
+              stateEl.dispatchEvent(new Event('change', { bubbles: true }));
+            } else {
+              await fillInput(WORKDAY_SELECTORS.state, candidateData.state, 'State');
+            }
+          }
+        }
+
+        // Check if we've reached resume upload section
+        if (isAtResumeSection()) {
+          console.log('[ATS Tailor] 🎯 Reached Resume section - triggering ATS Tailor');
+          break;
+        }
+
+        // Click Continue/Next to go to next page
+        const continueClicked = await clickElement(WORKDAY_SELECTORS.continueBtn, 'Continue');
+        if (!continueClicked) {
+          // Try Save button as fallback
+          await clickElement(WORKDAY_SELECTORS.saveBtn, 'Save');
+        }
+        
+        await sleep(2000);
+      }
+
+      // TRIGGER EXISTING ATS TAILOR for resume/cover letter
+      updateBanner('✅ Workday prep complete! Triggering ATS Tailor...', 'success');
+      
+      // Store job data for the tailor
+      await new Promise(resolve => {
+        chrome.storage.local.set({ 
+          workday_job_data: jobData,
+          workday_flow_complete: true 
+        }, resolve);
+      });
+
+      // Send message to trigger main ATS tailor functionality
+      chrome.runtime.sendMessage({
+        action: 'ATS_TAILOR_AUTOFILL',
+        platform: 'workday',
+        candidate: candidateData,
+        jobData: jobData
+      });
+
+      // Trigger the auto-tailor if on resume page
+      if (isAtResumeSection()) {
+        hasTriggeredTailor = false; // Reset to allow tailoring
+        await autoTailorDocuments();
+      }
+
+    } catch (error) {
+      console.error('[ATS Tailor] Workday flow error:', error);
+      updateBanner(`Workday Error: ${error.message}`, 'error');
+    } finally {
+      workdayFlowInProgress = false;
+    }
+  }
+
+  // ============ MESSAGE LISTENER FOR WORKDAY FLOW ============
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'START_WORKDAY_FLOW') {
+      handleWorkdayFullFlow(message.candidateData);
+      sendResponse({ status: 'started' });
+      return true;
+    }
+    
+    if (message.action === 'AUTOFILL_CANDIDATE') {
+      // Handle bulk apply autofill
+      if (message.candidate && message.platform === 'workday') {
+        handleWorkdayFullFlow({
+          first_name: message.candidate.name?.split(' ')[0] || '',
+          last_name: message.candidate.name?.split(' ').slice(1).join(' ') || '',
+          email: message.candidate.email,
+          phone: message.candidate.phone
+        });
+      }
+      sendResponse({ status: 'processing' });
+      return true;
+    }
+  });
+
+  // ============ PLATFORM DETECTION ============
+  function detectPlatform() {
+    const hostname = window.location.hostname;
+    const url = window.location.href;
+    
+    if (hostname.includes('workday.com') || hostname.includes('myworkdayjobs.com')) {
+      // Check if this is a job posting page vs application page
+      if (url.includes('/job/') || url.includes('/jobs/')) {
+        return 'workday_full_flow';
+      }
+      return 'workday';
+    }
+    if (hostname.includes('greenhouse.io')) return 'greenhouse';
+    if (hostname.includes('smartrecruiters.com')) return 'smartrecruiters';
+    if (hostname.includes('workable.com')) return 'workable';
+    return 'unknown';
+  }
   let tailoringInProgress = false;
   const startTime = Date.now();
   const currentJobUrl = window.location.href;

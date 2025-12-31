@@ -165,13 +165,41 @@
         </div>
       </div>
 
+      <!-- Workday Full Flow Section -->
+      <div class="workday-section">
+        <h3>🚀 Workday Full Flow</h3>
+        <p class="workday-hint">Automates: Apply → Login → Fill Form → Trigger ATS Tailor</p>
+        <div class="workday-settings">
+          <label class="toggle-row" for="workdayAutoToggle">
+            <span class="toggle-label">Enable Workday Automation</span>
+            <input type="checkbox" id="workdayAutoToggle" checked />
+          </label>
+        </div>
+        <button id="runWorkdayFlow" class="btn btn-accent btn-large btn-full">
+          <span class="btn-icon-left">⚡</span>
+          <span class="btn-text">Run Workday Flow</span>
+        </button>
+        <details class="workday-credentials">
+          <summary>Workday Login Settings</summary>
+          <div class="input-group">
+            <label for="workdayEmail">Email</label>
+            <input type="email" id="workdayEmail" value="Maxokafordev@gmail.com">
+          </div>
+          <div class="input-group">
+            <label for="workdayPassword">Password</label>
+            <input type="password" id="workdayPassword" value="May19315park@">
+          </div>
+          <button id="saveWorkdayCreds" class="btn btn-secondary btn-sm">Save Credentials</button>
+        </details>
+      </div>
+
       <!-- Bulk Apply Button -->
       <div class="bulk-apply-section">
         <button id="openBulkApply" class="btn btn-secondary btn-large btn-full">
           <span class="btn-icon-left">📊</span>
           <span class="btn-text">Bulk Apply Dashboard</span>
         </button>
-        <p class="bulk-hint">Upload CSV with multiple job URLs for sequential applications</p>
+        <p class="bulk-hint">Upload CSV or paste URLs for sequential applications</p>
       </div>
 
       <!-- Simplify ATS Score Breakdown -->

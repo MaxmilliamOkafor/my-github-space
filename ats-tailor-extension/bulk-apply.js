@@ -83,6 +83,13 @@ class BulkApplier {
     // Sample data
     document.getElementById('loadSampleBtn')?.addEventListener('click', () => this.loadSampleData());
 
+    // Manual URL input
+    document.getElementById('addUrlsBtn')?.addEventListener('click', () => this.addManualUrls());
+    document.getElementById('clearUrlsBtn')?.addEventListener('click', () => {
+      const textarea = document.getElementById('manualUrls');
+      if (textarea) textarea.value = '';
+    });
+
     // Table controls
     document.getElementById('selectAllBtn')?.addEventListener('click', () => this.selectAll(true));
     document.getElementById('deselectAllBtn')?.addEventListener('click', () => this.selectAll(false));
@@ -103,6 +110,82 @@ class BulkApplier {
     document.getElementById('clearLogBtn')?.addEventListener('click', () => {
       const logContainer = document.getElementById('logContainer');
       if (logContainer) logContainer.innerHTML = '<div class="log-entry info">Log cleared</div>';
+    });
+  }
+
+  addManualUrls() {
+    const textarea = document.getElementById('manualUrls');
+    const urlText = textarea?.value?.trim();
+    
+    if (!urlText) {
+      this.log('Please paste at least one URL', 'warning');
+      return;
+    }
+
+    // Parse URLs (one per line)
+    const urls = urlText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line && (line.startsWith('http://') || line.startsWith('https://')));
+
+    if (urls.length === 0) {
+      this.log('No valid URLs found. Make sure each URL starts with http:// or https://', 'error');
+      return;
+    }
+
+    // Get candidate info from session
+    chrome.storage.local.get(['ats_session'], async (result) => {
+      let candidateName = '';
+      let email = '';
+      let phone = '';
+
+      if (result.ats_session?.user) {
+        email = result.ats_session.user.email || '';
+        // Try to get profile data
+        try {
+          const profileRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${result.ats_session.user.id}&select=first_name,last_name,email,phone`,
+            {
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${result.ats_session.access_token}`,
+              },
+            }
+          );
+          const profiles = await profileRes.json();
+          if (profiles?.[0]) {
+            candidateName = `${profiles[0].first_name || ''} ${profiles[0].last_name || ''}`.trim();
+            email = profiles[0].email || email;
+            phone = profiles[0].phone || '';
+          }
+        } catch (e) {
+          console.log('Could not fetch profile for manual URLs');
+        }
+      }
+
+      // Add URLs to job queue
+      const startIndex = this.jobs.length;
+      const newJobs = urls.map((url, index) => ({
+        id: startIndex + index,
+        job_url: url,
+        candidate_name: candidateName,
+        email: email,
+        phone: phone,
+        priority: 'medium',
+        notes: 'Added manually',
+        status: 'pending',
+        selected: true,
+        atsScore: null
+      }));
+
+      this.jobs = [...this.jobs, ...newJobs];
+      this.saveState();
+      this.updateUI();
+      
+      // Clear textarea
+      if (textarea) textarea.value = '';
+      
+      this.log(`✅ Added ${newJobs.length} job URL(s) to queue`, 'success');
     });
   }
 
