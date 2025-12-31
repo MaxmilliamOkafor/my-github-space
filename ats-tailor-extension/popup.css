@@ -628,3 +628,62 @@ body {
 .missing-fixes h4 { font-size: 11px; color: #ffa502; margin-bottom: 6px; }
 .missing-fixes ul { list-style: none; font-size: 9px; }
 .missing-fixes li { padding: 4px 6px; background: rgba(255,165,2,0.1); border-radius: 4px; margin-bottom: 4px; }
+
+/* Workday Section */
+.workday-section {
+  background: linear-gradient(135deg, rgba(255,107,53,0.1), rgba(255,140,66,0.05));
+  border: 1px solid rgba(255,107,53,0.3);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.workday-section h3 {
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: #ff8c42;
+}
+
+.workday-hint {
+  font-size: 10px;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 10px;
+}
+
+.workday-settings {
+  margin-bottom: 10px;
+}
+
+.workday-credentials {
+  margin-top: 10px;
+  font-size: 11px;
+}
+
+.workday-credentials summary {
+  cursor: pointer;
+  color: rgba(255,255,255,0.7);
+  padding: 6px 0;
+}
+
+.workday-credentials summary:hover {
+  color: #ff8c42;
+}
+
+.workday-credentials .input-group {
+  margin-top: 8px;
+}
+
+.workday-credentials .btn {
+  margin-top: 8px;
+}
+
+.btn-accent {
+  background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%);
+  color: #000;
+  font-weight: 600;
+}
+
+.btn-accent:hover {
+  background: linear-gradient(135deg, #ff8c42 0%, #ffa552 100%);
+  box-shadow: 0 4px 12px rgba(255,107,53,0.4);
+}

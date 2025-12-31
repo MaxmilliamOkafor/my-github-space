@@ -27,6 +27,26 @@
         <p class="upload-hint">Format: job_url, candidate_name, email, phone, priority, notes</p>
         <input type="file" id="csvInput" accept=".csv" hidden>
       </div>
+      
+      <div class="upload-divider">
+        <span>OR</span>
+      </div>
+      
+      <!-- Manual URL Input -->
+      <div class="manual-url-section">
+        <label for="manualUrls" class="manual-label">📋 Paste Job URLs (one per line)</label>
+        <textarea 
+          id="manualUrls" 
+          class="manual-textarea" 
+          placeholder="https://company.workday.com/job/123&#10;https://boards.greenhouse.io/company/jobs/456&#10;https://jobs.smartrecruiters.com/company/789"
+          rows="5"
+        ></textarea>
+        <div class="manual-url-actions">
+          <button id="addUrlsBtn" class="btn btn-primary btn-sm">➕ Add URLs to Queue</button>
+          <button id="clearUrlsBtn" class="btn btn-secondary btn-sm">Clear</button>
+        </div>
+      </div>
+      
       <button id="loadSampleBtn" class="btn btn-secondary btn-sm">Load Sample Data</button>
     </section>
 
