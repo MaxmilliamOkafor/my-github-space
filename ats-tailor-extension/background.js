@@ -6,8 +6,8 @@ console.log('[ATS Tailor] Background service worker started');
 // Handle extension installation
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    console.log('[ATS Tailor] Extension installed');
-    // Set default Workday credentials
+    console.log('[ATS Tailor] Extension installed - setting defaults');
+    // Set default Workday credentials and auto-enable
     chrome.storage.local.set({
       workday_email: 'Maxokafordev@gmail.com',
       workday_password: 'May19315park@',
@@ -15,6 +15,12 @@ chrome.runtime.onInstalled.addListener((details) => {
     });
   } else if (details.reason === 'update') {
     console.log('[ATS Tailor] Extension updated to version', chrome.runtime.getManifest().version);
+    // Ensure workday_auto_enabled defaults to true on update if not set
+    chrome.storage.local.get(['workday_auto_enabled'], (result) => {
+      if (result.workday_auto_enabled === undefined) {
+        chrome.storage.local.set({ workday_auto_enabled: true });
+      }
+    });
   }
 });
 
