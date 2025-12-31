@@ -1,0 +1,69 @@
+{
+  "manifest_version": 3,
+  "name": "ATS Tailored CV & Cover Letter",
+  "version": "2.0.0",
+  "description": "Enterprise ATS optimization with Simplify Keyword Matcher scoring, multi-page autofill, and bulk CSV job applications. Supports Greenhouse, Workday, SmartRecruiters, Bullhorn, Teamtailor, Workable, ICIMS, Oracle Cloud.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://*.greenhouse.io/*",
+    "https://*.workday.com/*",
+    "https://*.myworkdayjobs.com/*",
+    "https://*.smartrecruiters.com/*",
+    "https://*.bullhornstaffing.com/*",
+    "https://*.bullhorn.com/*",
+    "https://*.teamtailor.com/*",
+    "https://*.workable.com/*",
+    "https://*.icims.com/*",
+    "https://*.oracle.com/*",
+    "https://*.oraclecloud.com/*",
+    "https://*.taleo.net/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.greenhouse.io/*",
+        "https://*.workday.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://*.smartrecruiters.com/*",
+        "https://*.bullhornstaffing.com/*",
+        "https://*.bullhorn.com/*",
+        "https://*.teamtailor.com/*",
+        "https://*.workable.com/*",
+        "https://*.icims.com/*",
+        "https://*.oracle.com/*",
+        "https://*.oraclecloud.com/*",
+        "https://*.taleo.net/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*.png", "content.css", "bulk-apply.html", "bulk-apply.css", "bulk-apply.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
